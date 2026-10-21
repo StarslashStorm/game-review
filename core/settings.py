@@ -14,8 +14,12 @@ from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
 import os
+import sys
 
 load_dotenv()
+
+# True while running "python manage.py test"
+TESTING = len(sys.argv) > 1 and sys.argv[1] == "test"
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ['SECRET_KEY']
+SECRET_KEY = os.environ['SECRET_KEY'] if not TESTING else os.environ.get('SECRET_KEY', 'test-only-secret-key')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG') == 'True'
@@ -94,6 +98,15 @@ DATABASES = {
         default=os.getenv("DATABASE_URL")
     )
 }
+
+# Automated tests use a throwaway in-memory SQLite database, never the real one
+if TESTING:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
+    }
 
 # Supabase Client Settings
 SUPABASE_URL = os.getenv("SUPABASE_URL")
