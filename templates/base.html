@@ -185,6 +185,25 @@
     </nav>
   {% endif %}
    <main class="w-full lg:w-5xl px-0 md:px-4 py-4 md:py-6 mx-auto px-4 py-6 mt-[58px]">
+    {% block messages %}
+    {% if messages %}
+    <div class="max-w-3xl mx-auto px-4 mb-4 space-y-2">
+      {% for message in messages %}
+      <div role="alert"
+        class="flash-message flex items-start justify-between gap-3 px-4 py-3 rounded-xl border text-sm font-medium
+          {% if message.tags == 'success' %}bg-green-50 border-green-200 text-green-800
+          {% elif message.tags == 'error' %}bg-red-50 border-red-200 text-red-800
+          {% else %}bg-blue-50 border-blue-200 text-blue-800{% endif %}">
+        <span>{{ message }}</span>
+        <button type="button" aria-label="Close" onclick="this.closest('.flash-message').remove()"
+          class="cursor-pointer opacity-60 hover:opacity-100">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endblock %}
     {% block content %}{% endblock %}
   </main>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -192,14 +211,17 @@
       const userMenuBtn = document.getElementById('user-menu-button');
       const userDropdown = document.getElementById('user-dropdown');
 
-      userMenuBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          userDropdown.classList.toggle('hidden');
-      });
+      // These elements don't exist on every page, so only attach listeners when they do
+      if (userMenuBtn && userDropdown) {
+          userMenuBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              userDropdown.classList.toggle('hidden');
+          });
 
-      document.addEventListener('click', () => {
-          userDropdown.classList.add('hidden');
-      });
+          document.addEventListener('click', () => {
+              userDropdown.classList.add('hidden');
+          });
+      }
   </script>
 </body>
 </html>

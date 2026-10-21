@@ -1,4 +1,6 @@
-{% extends "base.html" %} {% block content %}
+{% extends "base.html" %}
+{# This page shows its own messages, so hide the ones from base.html #}
+{% block messages %}{% endblock %} {% block content %}
 <div class="max-w-4xl flex items-center mx-auto md:min-h-screen p-4">
   <div
     class="grid md:grid-cols-3 items-center [box-shadow:0_2px_10px_-3px_rgba(14,14,14,0.3)] rounded-xl overflow-hidden"

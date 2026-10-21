@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{# This page shows its own messages, so hide the ones from base.html #}
+{% block messages %}{% endblock %}
 {% block title %}Settings{% endblock %}
 
 {% block content %}
