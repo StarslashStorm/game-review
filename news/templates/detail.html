@@ -30,6 +30,18 @@
            class="group flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-orange-600 transition-all">
           <span class="transition-transform group-hover:-translate-x-1">←</span> Back to feed
         </a>
+        {% if user_id and user_id == item.author_id %}
+        <div class="flex items-center gap-2">
+          <a href="{% url 'news_update' item.id %}"
+             class="px-4 py-2 rounded-xl text-sm font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all">
+            <i class="fa-solid fa-pen"></i> Edit
+          </a>
+          <a href="{% url 'news_delete' item.id %}"
+             class="px-4 py-2 rounded-xl text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-all">
+            <i class="fa-solid fa-trash-can"></i> Delete
+          </a>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -55,6 +67,14 @@
         </button>
       </div>
     </form>
+  </div>
+  {% else %}
+  <div class="mb-10 p-6 bg-gray-50 border border-gray-200 rounded-2xl text-center">
+    <p class="text-sm font-bold text-gray-700 mb-3">Log in or create an account to join the conversation</p>
+    <div class="flex items-center justify-center gap-3">
+      <a href="{% url 'login' %}" class="px-5 py-2 rounded-xl text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 transition-all">Log in</a>
+      <a href="{% url 'register' %}" class="px-5 py-2 rounded-xl text-sm font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-100 transition-all">Create account</a>
+    </div>
   </div>
   {% endif %}
 
@@ -86,6 +106,10 @@
               <i class="fa-solid fa-arrow-down"></i>
             </button>
             <button onclick="toggleReply('{{ comment.id }}')" class="hover:text-gray-900 cursor-pointer">Reply</button>
+            {% if user_id and user_id == comment.author_id %}
+            <a href="{% url 'comment_update' comment.id %}" class="hover:text-gray-900">Edit</a>
+            <a href="{% url 'comment_delete' comment.id %}" class="hover:text-red-600">Delete</a>
+            {% endif %}
           </div>
 
           <div id="reply-form-{{ comment.id }}" class="hidden mt-4 animate-in">
@@ -127,6 +151,10 @@
                       <i class="fa-solid fa-arrow-down"></i>
                     </button>
                     <button onclick="toggleReply('{{ reply.id }}')" class="hover:text-gray-900 cursor-pointer">Reply</button>
+                    {% if user_id and user_id == reply.author_id %}
+                    <a href="{% url 'comment_update' reply.id %}" class="hover:text-gray-900">Edit</a>
+                    <a href="{% url 'comment_delete' reply.id %}" class="hover:text-red-600">Delete</a>
+                    {% endif %}
                   </div>
 
                   <div id="reply-form-{{ reply.id }}" class="hidden mt-3 animate-in">
@@ -162,6 +190,10 @@
                           <button onclick="handleCommentVote(this, '{{ sub_reply.id }}', -1)" class="hover:text-blue-500 cursor-pointer">
                             <i class="fa-solid fa-arrow-down"></i>
                           </button>
+                          {% if user_id and user_id == sub_reply.author_id %}
+                          <a href="{% url 'comment_update' sub_reply.id %}" class="hover:text-gray-900">Edit</a>
+                          <a href="{% url 'comment_delete' sub_reply.id %}" class="hover:text-red-600">Delete</a>
+                          {% endif %}
                         </div>
                       </div>
                     </div>

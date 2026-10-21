@@ -7,6 +7,13 @@
 
   <!-- Create Post Section -->
   <div class="bg-white border border-gray-300 rounded-md p-3 mb-6 shadow-sm">
+    <!-- Shown when a logged-out user tries to post -->
+    <div id="login-required-notice" class="hidden mb-3 p-3 rounded-md bg-blue-50 border border-blue-200 text-sm text-blue-800">
+      <i class="fa-solid fa-circle-info"></i>
+      <span class="font-bold">You need to be logged in to create a post.</span>
+      <a href="{% url 'login' %}" class="underline font-bold">Log in</a> or
+      <a href="{% url 'register' %}" class="underline font-bold">create an account</a>.
+    </div>
     <form id="post-form" enctype="multipart/form-data" class="flex flex-col gap-3">
       {% csrf_token %}
       <div class="flex items-center gap-3">
@@ -231,6 +238,15 @@
     const sentinel = document.getElementById("scroll-sentinel");
     const loader = document.getElementById("scroll-loader");
 
+    // Logged-in user's id ("" when logged out). escapejs makes it safe inside a JS string.
+    const currentUserId = "{{ user_id|default:''|escapejs }}";
+    const loginNotice = document.getElementById("login-required-notice");
+
+    function showLoginNotice() {
+      loginNotice.classList.remove("hidden");
+      loginNotice.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
     let currentCategory = "all";
     let currentPage = 1;
     let isLoading = false;
@@ -335,6 +351,16 @@
                         <i class="fa-solid fa-share text-base"></i>
                         <span class="share-text">Share</span>
                     </button>
+                    ${currentUserId && post.author_id === currentUserId ? `
+                    <a href="/edit/${post.id}/" class="flex items-center gap-2 hover:bg-gray-100 px-2 py-1.5 rounded transition-colors">
+                        <i class="fa-solid fa-pen text-base"></i>
+                        <span>Edit</span>
+                    </a>
+                    <a href="/delete/${post.id}/" class="flex items-center gap-2 text-red-600 hover:bg-red-50 px-2 py-1.5 rounded transition-colors">
+                        <i class="fa-solid fa-trash-can text-base"></i>
+                        <span>Delete</span>
+                    </a>
+                    ` : ''}
                 </div>
             </div>
         </div>
@@ -645,6 +671,11 @@
     form.addEventListener("submit", async function (e) {
       e.preventDefault();
 
+      if (!currentUserId) {
+        showLoginNotice();
+        return;
+      }
+
       const content = quill.root.innerHTML;
       if (content === "<p><br></p>" || !content.trim()) {
         alert("Post content cannot be empty.");
@@ -684,6 +715,11 @@
           },
           body: formData
         });
+
+        if (res.status === 401) {
+          showLoginNotice();
+          return;
+        }
 
         const data = await res.json();
 
