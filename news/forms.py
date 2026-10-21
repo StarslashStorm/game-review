@@ -26,3 +26,18 @@ class NewsForm(forms.Form):
         if not content or content == "<p><br></p>":
             raise forms.ValidationError("Content is required.")
         return content
+
+class CommentForm(forms.Form):
+    content = forms.CharField(
+        strip=True,  # "   " becomes "" and is rejected as empty
+        error_messages={"required": "Your comment can't be empty."},
+        widget=forms.Textarea(attrs={
+            "rows": 4,
+            "placeholder": "What are your thoughts?",
+            "class": (
+                "w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-sm "
+                "focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 "
+                "transition-all outline-none resize-none"
+            ),
+        }),
+    )

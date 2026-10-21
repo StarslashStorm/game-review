@@ -12,5 +12,7 @@ urlpatterns = [
     path("api/create/", views.news_api_create, name="news_api_create"),
     path("api/<uuid:pk>/vote/", views.news_vote, name="news_vote"),
     path("<uuid:pk>/comment/", views.comment_create, name="comment_create"),
+    path("comment/<uuid:comment_id>/edit/", views.comment_update, name="comment_update"),
+    path("comment/<uuid:comment_id>/delete/", views.comment_delete, name="comment_delete"),
     path("api/comment/<uuid:comment_id>/vote/", views.comment_vote, name="comment_vote"),
 ]

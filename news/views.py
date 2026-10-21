@@ -1,12 +1,28 @@
 import uuid
+from django.contrib import messages
 from django.http import Http404, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
+from django.urls import reverse
+from django.views.decorators.http import require_http_methods
 from .models import News
-from .forms import NewsForm
+from .forms import NewsForm, CommentForm
 from core.supabase import get_supabase_client
 from datetime import datetime
 from accounts.decorator import supabase_auth_required
 from core.utils import parse_supabase_data
+
+def get_row_or_404(client, table, row_id):
+    """Fetch one row by id from a Supabase table, or raise Http404."""
+    res = client.table(table).select("*").eq("id", str(row_id)).limit(1).execute()
+    if not res.data:
+        raise Http404(f"{table} not found")
+    return res.data[0]
+
+
+def is_owner(request, row):
+    """True when the logged-in user wrote this post/comment."""
+    return str(row.get("author_id")) == str(request.session.get("supabase_user_id"))
+
 
 def news_list(request):
     res = (
@@ -266,109 +282,98 @@ def news_api_create(request):
     return JsonResponse({"success": True, "message": "News created successfully"})
 
 @supabase_auth_required
+@require_http_methods(["GET", "POST"])
 def news_update(request, pk):
-    user_id      = request.session.get("supabase_user_id")
-    client       = get_supabase_client()
+    client = get_supabase_client()
+    news   = get_row_or_404(client, "news", pk)
 
-    res  = client.table("news").select("*").eq("id", str(pk)).single().execute()
-    news = res.data
-    categories = client.table("categories").select("*").execute()
+    if not is_owner(request, news):
+        messages.error(request, "You can only edit/delete your own posts.")
+        return redirect("news_detail", pk=pk)
 
-    if not news:
-        return JsonResponse({"error": "Not found"}, status=404)
-
-    if news["author_id"] != user_id:
-        return JsonResponse({"error": "Forbidden"}, status=403)
+    context = {
+        "news": news,
+        "is_edit": True,
+        "title": "Edit - Web Game News",
+        "description": "Edit your news post.",
+    }
 
     if request.method == "GET":
-        form = NewsForm(initial={
+        context["form"] = NewsForm(initial={
             "title":   news["title"],
             "content": news["content"],
         })
-        return render(request, "form.html", {
-            "form": form,
-            "news": news,
-            "title": "Update - Web Game News",
-            "description": "Update an existing news post.",
-        })
+        return render(request, "form.html", context)
 
-    if request.method == "POST":
-        form = NewsForm(request.POST, request.FILES)
+    form = NewsForm(request.POST, request.FILES)
+    context["form"] = form
 
-        if not form.is_valid():
-            return render(request, "form.html", {
-                "form": form,
-                "news": news,
-                "title": "Update - Web Game News",
-                "description": "Update an existing news post.",
-            })
+    if not form.is_valid():
+        return render(request, "form.html", context)
 
-        title   = form.cleaned_data["title"]
-        content = form.cleaned_data["content"]
-        image   = form.cleaned_data.get("image")
+    image        = form.cleaned_data.get("image")
+    image_url    = news.get("image_url")
+    remove_image = request.POST.get("remove_image") == "true"
 
-        image_url    = news.get("image_url")   
-        remove_image = request.POST.get("remove_image") == "true"
-
-        if remove_image:
-            image_url = None
-
-        elif image:
-            file_ext  = image.name.rsplit(".", 1)[-1].lower()
-            file_name = f"{uuid.uuid4()}.{file_ext}"
-            try:
-                client.storage.from_("news_bucket").upload(
-                    file_name,
-                    image.read(),
-                    {"content-type": image.content_type},
-                )
-                image_url = client.storage.from_("news_bucket").get_public_url(file_name)
-            except Exception as e:
-                form.add_error(None, f"Image upload failed: {str(e)}")
-                return render(request, "form.html", {
-                    "form": form,
-                    "news": news,
-                    "title": "Edit Post",
-                })
-
+    if image:
+        file_ext  = image.name.rsplit(".", 1)[-1].lower()
+        file_name = f"{uuid.uuid4()}.{file_ext}"
         try:
-            result = (
-                client.table("news")
-                .update({
-                    "title":     title,
-                    "content":   content,
-                    "image_url": image_url,
-                })
-                .eq("id", str(pk))
-                .execute()
+            client.storage.from_("news_bucket").upload(
+                file_name,
+                image.read(),
+                {"content-type": image.content_type},
             )
+            image_url = client.storage.from_("news_bucket").get_public_url(file_name)
         except Exception as e:
-            form.add_error(None, f"Update failed: {str(e)}")
-            return render(request, "form.html", {
-                "form": form,
-                "news": news,
-                "title": "Edit Post",
+            form.add_error(None, f"Image upload failed: {str(e)}")
+            return render(request, "form.html", context)
+    elif remove_image:
+        image_url = None
+
+    try:
+        result = (
+            client.table("news")
+            .update({
+                "title":     form.cleaned_data["title"],
+                "content":   form.cleaned_data["content"],
+                "image_url": image_url,
             })
+            .eq("id", str(pk))
+            .execute()
+        )
+    except Exception as e:
+        form.add_error(None, f"Update failed: {str(e)}")
+        return render(request, "form.html", context)
 
-        if not result.data:
-            form.add_error(None, "Update returned no data, please try again.")
-            return render(request, "form.html", {
-                "form": form,
-                "news": news,
-                "title": "Edit Post",
-            })
+    if not result.data:
+        form.add_error(None, "Update returned no data, please try again.")
+        return render(request, "form.html", context)
 
-        return render(request, "news/list.html", {
-            "categories": categories.data
-        })
-
-    return JsonResponse({"error": "Method not allowed"}, status=405)
+    messages.success(request, "Your post was updated.")
+    return redirect("news_detail", pk=pk)
 
 
 @supabase_auth_required
+@require_http_methods(["GET", "POST"])
 def news_delete(request, pk):
-    if request.method == "POST":
-        get_supabase_client().table("news").delete().eq("id", str(pk)).execute()
+    client = get_supabase_client()
+    news   = get_row_or_404(client, "news", pk)
+
+    if not is_owner(request, news):
+        messages.error(request, "You can only edit/delete your own posts.")
+        return redirect("news_detail", pk=pk)
+
+    if request.method == "GET":
+        return render(request, "confirm_delete.html", {
+            "title": "Delete post - Web Game News",
+            "object_type": "post",
+            "object_preview": news["title"],
+            "cancel_url": reverse("news_detail", kwargs={"pk": pk}),
+        })
+
+    client.table("news").delete().eq("id", str(pk)).execute()
+    messages.success(request, "Your post was deleted.")
     return redirect("news_list")
 
 
@@ -408,16 +413,17 @@ def news_vote(request, pk):
 @supabase_auth_required
 def comment_create(request, pk):
     if request.method != "POST":
-        return JsonResponse({"error": "Method not allowed"}, status=405)
+        return redirect("news_detail", pk=pk)
 
     user_id = request.session.get("supabase_user_id")
     client = get_supabase_client()
 
-    content = (request.POST.get("content") or "").strip()
+    form = CommentForm(request.POST)
     parent_id = request.POST.get("parent_id")
 
-    if not content:
-        return JsonResponse({"error": "Content is required"}, status=400)
+    if not form.is_valid():
+        messages.error(request, form.errors["content"][0])
+        return redirect("news_detail", pk=pk)
 
     try:
         depth = 1
@@ -438,22 +444,99 @@ def comment_create(request, pk):
                     depth = 2
 
         if depth > 3:
-            return JsonResponse({"error": "Maximum reply depth reached"}, status=400)
+            messages.error(request, "Maximum reply depth reached.")
+            return redirect("news_detail", pk=pk)
 
         result = client.table("comments").insert({
             "news_id": str(pk),
             "author_id": user_id,
             "parent_id": parent_id if parent_id else None,
-            "content": content,
+            "content": form.cleaned_data["content"],
         }).execute()
 
-    except Exception as e:
-        return JsonResponse({"error": f"Failed to post comment: {str(e)}"}, status=500)
+    except Exception:
+        messages.error(request, "Something went wrong posting your comment. Please try again.")
+        return redirect("news_detail", pk=pk)
 
     if not result.data:
-        return JsonResponse({"error": "Comment creation failed"}, status=500)
+        messages.error(request, "Something went wrong posting your comment. Please try again.")
+        return redirect("news_detail", pk=pk)
 
+    messages.success(request, "Your comment was posted.")
     return redirect("news_detail", pk=pk)
+
+
+def comment_redirect(comment):
+    """Send the user back to the post, scrolled to this comment."""
+    url = reverse("news_detail", kwargs={"pk": comment["news_id"]})
+    return redirect(f"{url}#comment-{comment['id']}")
+
+
+@supabase_auth_required
+@require_http_methods(["GET", "POST"])
+def comment_update(request, comment_id):
+    client  = get_supabase_client()
+    comment = get_row_or_404(client, "comments", comment_id)
+
+    if not is_owner(request, comment):
+        messages.error(request, "You can only edit/delete your own comments.")
+        return comment_redirect(comment)
+
+    if request.method == "GET":
+        form = CommentForm(initial={"content": comment["content"]})
+    else:
+        form = CommentForm(request.POST)
+        if form.is_valid():
+            client.table("comments") \
+                .update({"content": form.cleaned_data["content"]}) \
+                .eq("id", str(comment_id)) \
+                .execute()
+            messages.success(request, "Your comment was updated.")
+            return comment_redirect(comment)
+
+    return render(request, "comment_form.html", {
+        "title": "Edit comment - Web Game News",
+        "form": form,
+        "comment": comment,
+        "cancel_url": reverse("news_detail", kwargs={"pk": comment["news_id"]}),
+    })
+
+
+@supabase_auth_required
+@require_http_methods(["GET", "POST"])
+def comment_delete(request, comment_id):
+    client  = get_supabase_client()
+    comment = get_row_or_404(client, "comments", comment_id)
+
+    if not is_owner(request, comment):
+        messages.error(request, "You can only edit/delete your own comments.")
+        return comment_redirect(comment)
+
+    if request.method == "GET":
+        return render(request, "confirm_delete.html", {
+            "title": "Delete comment - Web Game News",
+            "object_type": "comment",
+            "object_preview": comment["content"],
+            "cancel_url": reverse("news_detail", kwargs={"pk": comment["news_id"]}),
+        })
+
+    # Collect the comment and every reply below it (replies of replies too).
+    ids_to_delete = [str(comment_id)]
+    index = 0
+    while index < len(ids_to_delete):
+        children = client.table("comments") \
+            .select("id") \
+            .eq("parent_id", ids_to_delete[index]) \
+            .execute()
+        ids_to_delete += [str(child["id"]) for child in (children.data or [])]
+        index += 1
+
+    # Delete the deepest replies first and the comment itself last.
+    for row_id in reversed(ids_to_delete):
+        client.table("comments").delete().eq("id", row_id).execute()
+
+    messages.success(request, "Your comment was deleted.")
+    return redirect("news_detail", pk=comment["news_id"])
 
 
 @supabase_auth_required
