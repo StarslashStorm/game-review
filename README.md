@@ -75,10 +75,33 @@ This edit profile mode, user can input new username, view email, add information
 
 ![profile edit page screenshot](./assets/images/edit-profile.png)
 
+#### Editing and deleting posts
+
+The author of a post sees **Edit** and **Delete** buttons on the post page and on their own cards in the feed. Nobody else sees them, and the server also blocks anyone who isn't the author (they get the message "You can only edit/delete your own posts.").
+
+- **Edit** opens the post form already filled in with the current title, content and image. The page says "Edit your post" and the button says "Save changes". The image can be replaced or removed.
+- **Delete** opens a confirmation page ("Delete this post? This can't be undone.") with **Cancel** and a red **Yes, delete** button. Nothing is deleted until the user confirms.
+
+#### Editing and deleting comments
+
+Every comment, reply and sub-reply shows small **Edit** and **Delete** links to its author only.
+
+- **Edit** opens a page with the comment already filled in. Empty comments are rejected.
+- **Delete** uses the same confirmation page. Deleting a comment also deletes all of its replies.
+
+#### Feedback messages
+
+After an action the user sees a message at the top of the page. It is green for success (for example "Your post was updated."), red for errors and blue for information, and it can be closed with the ✕ button.
+
+#### Logged-out users
+
+- Visitors who aren't logged in see "Log in or create an account to join the conversation" instead of the comment box.
+- Trying to create a post while logged out shows "You need to be logged in to create a post" with links to log in or create an account.
+- Opening a page that needs an account sends the visitor to the login page with the message "Please log in first to do that."
+
 ### Future Feature
 
-1. Deleting Post
-2. Change password
+1. Change password
 
 ## Technologies Used
 
@@ -112,10 +135,64 @@ This edit profile mode, user can input new username, view email, add information
 | TC09     | Update username              | New username appeared          | New username appeared          | Pass |
 | TC09     | User deleting account        | Account deleted                | Account deleted                | Pass |
 | TC010    | Upload profile picture       | Profile picture updated        | Profile picture updated        | Pass |
+| TC11     | Author opens Edit on own post | Form is filled in with current title, content and image; heading "Edit your post" | | |
+| TC12     | Author saves edited post     | Post page shows new content and green "Your post was updated." | | |
+| TC13     | Author saves post with empty content | Form shows "Content is required." and post is unchanged | | |
+| TC14     | Author removes image while editing and saves | Post no longer shows the image | | |
+| TC15     | Another user opens `/edit/<post id>/` directly | Redirected to post with red "You can only edit/delete your own posts." | | |
+| TC16     | Author clicks Delete on own post | Confirmation page with Cancel and red "Yes, delete" | | |
+| TC17     | Author clicks Cancel on the confirmation page | Back on the post, nothing deleted | | |
+| TC18     | Author clicks "Yes, delete"  | Feed shows green "Your post was deleted." and post is gone | | |
+| TC19     | Another user opens `/delete/<post id>/` directly | Redirected to post with red error, post not deleted | | |
+| TC20     | Edit/Delete buttons on another user's post or comment | Buttons are not shown | | |
+| TC21     | Author edits own comment     | Comment form is filled in; after saving, green "Your comment was updated." | | |
+| TC22     | Author saves an empty comment | Error "Your comment can't be empty." and comment is unchanged | | |
+| TC23     | Author deletes a comment that has replies | Green "Your comment was deleted."; comment and all its replies are gone | | |
+| TC24     | Author edits/deletes own reply and sub-reply | Works the same as a top-level comment | | |
+| TC25     | Post an empty comment        | Red "Your comment can't be empty." | | |
+| TC26     | Logged-out user opens a post | "Log in or create an account to join the conversation" box instead of comment form | | |
+| TC27     | Logged-out user tries to create a post in the feed | "You need to be logged in to create a post" with Log in / create account links | | |
+| TC28     | Logged-out user opens `/create/` | Login page with blue "Please log in first to do that." | | |
+| TC29     | Close a message with the ✕ button | Message disappears | | |
+| TC30     | Open `/edit/<random id>/` for a post that doesn't exist | 404 page | | |
 
 - All core features are working as expected.
 - The deployed application runs successfully on Render.
 - Note: The deployed link may not load in certain environments due to external access restrictions or because the render stop running the link.
+
+### Automated Tests
+
+The automated tests are in `news/tests.py`. They replace Supabase with a small fake in-memory version, and they run on a temporary SQLite database. They never read or change the real Supabase data and don't need a `.env` file.
+
+Run them with:
+
+```bash
+python manage.py test news
+```
+
+They check that:
+
+- the author can edit and delete their own posts and comments
+- other users are blocked from editing or deleting (and see the error message)
+- the edit forms are filled in with the existing title, content, image and comment text
+- empty posts and empty comments are rejected
+- deleting a comment also deletes all of its replies, and deleting a sub-reply keeps its parents
+- posts or comments that don't exist give a 404 page
+- logged-out users are sent to the login page with "Please log in first to do that.", and the `/api/` URLs return a JSON 401 error instead
+- the Edit/Delete buttons only appear for the author, and logged-out users see the login box
+- success messages are shown in green and error messages in red
+
+Result: 40 tests, all passing.
+
+### Fixed bugs
+
+- **Saving an edited post crashed.** After saving, the code tried to show `news/list.html`, which doesn't exist. It now goes to the post page and shows "Your post was updated."
+- **Any logged-in user could delete any post.** `news_delete` didn't check who wrote the post. Only the author can delete it now, and only after confirming.
+- **Removing the image while editing did nothing.** The ✕ button only hid the preview. It now tells the server to remove the image.
+- **The create page said "Update a Post".** The heading and button now say "Create a Post" / "Publish Post" when creating and "Edit your post" / "Save changes" when editing.
+- **Comment errors showed raw JSON.** For example, posting an empty comment showed `{"error": "Content is required"}`. They now show a normal message on the post page.
+- **Creating a post while logged out showed "An error occurred while posting."** The page now explains that you need to log in and links to the login page.
+- **JavaScript error on every page.** The user-menu script in `base.html` looked for elements that don't exist. It now checks for them first.
 
 ### Unfixed bugs
 
